@@ -40,10 +40,12 @@ getParticipantsFromQualtrics <- function() {
   df <- read.csv('data/Qualtrics_P1_full.csv', stringsAsFactors = F)
   df <- df[-c(1,2),]
   write.csv(df, file='data/Qualtrics_P1.csv', quote=T, row.names=F)
+  cat('- prepped part 1 qualtrics data\n')
   # and for part 2:
   df <- read.csv('data/Qualtrics_P2_full.csv', stringsAsFactors = F)
   df <- df[-c(1,2),]
   write.csv(df, file='data/Qualtrics_P2.csv', quote=T, row.names=F)
+  cat('- prepped part 2 qualtrics data\n')
   
   # read in the cleaned file:
   df <- read.csv('data/Qualtrics_P2.csv', stringsAsFactors = F)
@@ -51,28 +53,35 @@ getParticipantsFromQualtrics <- function() {
     
   # want people who give informed consent:
   df <- df[which(df$Q1 == 'I agree to participate in this study'),]
+  cat('- checked informed consent\n')
+  
   
   # don't want people who did the task on their phone or tablet:
   df <- df[which(df$Q14 == 'Laptop/PC'),]
   #print(dim(df))
+  cat('- select Laptop/PC only\n')
+  
   
   # want people wearing their corrective devices if needed:
   if (length(which(df$Q20 == 'No')) > 0) {
     df <- df[-which(df$Q20 == 'No'),]
   }
   #print(dim(df))
+  cat('- select normal or correct vision only\n')
   
   # we don't want participants who just clicked through the task:
   if (length(which(df$Q114 == 'Pressed space quickly to get through the task')) > 0) {
     df <- df[-which(df$Q114 == 'Pressed space quickly to get through the task'),]
   }
   #print(dim(df))
+  cat('- select carefull responders\n')
   
   # we don't want data from participants who report their data might be useless:
   if (length(which(df$Q128 == 'Yes')) > 0) {
     df <- df[-which(df$Q128 == 'Yes'),]
   }
   #print(dim(df))
+  cat('- select useful data\n')
   
   
   # we want to know if the participant measured, estimated or skipped the distance to screen part:
@@ -88,26 +97,31 @@ getParticipantsFromQualtrics <- function() {
   
   # remove participants who didn't answer these questions:
   #df <- df[which(df$Q112 %in% c('Yes', 'No')),]
-  if (length(which(df$Q112 == "") > 0)) {
-    df <- df[-which(df$Q112 == ""),]
+  if (length(which(df$Q112.1 == "") > 0)) {
+    df <- df[-which(df$Q112.1 == ""),]
   }
   if (length(which(df$Q113 == "") > 0)) {
     df <- df[-which(df$Q113 == ""),]
   }
+  cat('- select people who anwered the calibration questions\n')
 
   # we want to know the 'group'?
-  df <- df[,c('id', 'group', 'Finished', 'Q98', 'Q112', 'Q113')]
+  df <- df[,c('id', 'group', 'Finished', 'Q98', 'Q112.1', 'Q113')]
   names(df) <- c('participant', 'group', 'finished', 'redid', 'distance_method', 'card_used')
   
-  df$distance_method[which(df$distance_method == 'Estimated the distance')] <- 'estimate'
+  #print(unique(df$distance_method))
+  
+  df$distance_method[which(df$distance_method == 'Estimated the distance')] <- 'estimated'
   df$distance_method[which(df$distance_method == 'Used a measuring device')] <- 'measured'
   df$distance_method[which(df$distance_method == 'Did not use a measuring device or estimate')] <- 'skipped'
+  cat('- get calibration self-evaluation data\n')
+  
   
   # remove double entries somewhat:
   doppelgangers <- unique(df$participant[duplicated(df$participant)])
   for (doppelganger in doppelgangers) {
     if (length(df$finished[which(df$participant == doppelganger)]) > 1) {
-      df <- df[ -which( df$finished == FALSE & df$participant == doppelganger ), ]
+      df <- df[ -which( df$finished == "False" & df$participant == doppelganger ), ]
     }
   }
   
@@ -187,7 +201,9 @@ getParticipants <- function() {
   
   # get participant info from both sources:
   data_pp <- getParticipantsFromData()
+  cat('parsed pavlovia data\n')
   data_qq <- getParticipantsFromQualtrics()
+  cat('parsed qualtrics data\n')
 
   # get those that match:
   pp <- unique(intersect(data_pp$participant, data_qq$participant))
