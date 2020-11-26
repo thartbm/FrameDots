@@ -11,14 +11,21 @@ getParticipantsFromData <- function() {
   # will collect participants and timestamps in these lists:
   participant <- c()
   timestamp <- c()
+  OS <- c()
+  frameRate <- c()
+  ttotal <- c()
   
   for (csv_file in csv_files) {
     
+    filename <- sprintf('data/Pavlovia/%s', csv_file)
+    
     # check how many trials in file? remove if not 22
-    csv_lines <- readLines(sprintf('data/Pavlovia/%s', csv_file))
+    csv_lines <- readLines(filename)
     if (length(csv_lines) < 23) {
       next
     }
+    
+    ppFIPS <- read.csv(sprintf('data/Pavlovia/%s', csv_file))
     
     # analyse string to get participant ID and timestamp
     FDpos <- gregexpr(pattern='_FrameDots_', csv_file)[[1]][1]
@@ -27,10 +34,13 @@ getParticipantsFromData <- function() {
     
     participant <- c(participant, pp)
     timestamp <- c(timestamp, ts)
+    OS <- c(OS, ppFIPS$OS[1])
+    frameRate <- c(frameRate, ppFIPS$frameRate[1])
+    ttotal <- c(ttotal, ppFIPS$cumulativetime[22])
 
   }
   
-  return(data.frame(participant, timestamp))
+  return(data.frame(participant, timestamp, OS, frameRate, ttotal))
   
 }
 
@@ -70,8 +80,8 @@ getParticipantsFromQualtrics <- function() {
   cat('- select normal or correct vision only\n')
   
   # we don't want participants who just clicked through the task:
-  if (length(which(df$Q114 == 'Pressed space quickly to get through the task')) > 0) {
-    df <- df[-which(df$Q114 == 'Pressed space quickly to get through the task'),]
+  if (length(which(df$Q114.1 == 'Pressed space quickly to get through the task')) > 0) {
+    df <- df[-which(df$Q114.1 == 'Pressed space quickly to get through the task'),]
   }
   #print(dim(df))
   cat('- select carefull responders\n')
@@ -217,6 +227,9 @@ getParticipants <- function() {
   #print(table(data_qq$participant))
   # add timestamp column to data_qq
   data_qq$timestamp <- NA
+  data_qq$OS <- NA
+  data_qq$frameRate <- NA
+  data_qq$completiontime <- NA 
   
   # these participants appear twice in Qualtrics:
   # 217966
@@ -230,10 +243,16 @@ getParticipants <- function() {
     if (length(prows) == 1) {
       
       data_qq$timestamp[rowno] <- as.character(data_pp$timestamp)[prows]
+      data_qq$OS[rowno] <- data_pp$OS[prows]
+      data_qq$frameRate[rowno] <- data_pp$frameRate[prows]
+      data_qq$completiontime[rowno] <- data_pp$ttotal[prows]
       
     } else {
       
       data_qq$timestamp[rowno] <- as.character(rev(sort(data_pp$timestamp[which(data_pp$participant == ppid)])))[1]
+      data_qq$OS[rowno] <- rev(sort(data_pp$OS[which(data_pp$participant == ppid)]))[1]
+      data_qq$frameRate[rowno] <- rev(sort(data_pp$frameRate[which(data_pp$participant == ppid)]))[1]
+      data_qq$completiontime[rowno] <- rev(sort(data_pp$ttotal[which(data_pp$participant == ppid)]))[1]
       
     }
 
