@@ -1,6 +1,6 @@
 library('afex')
 #library('ez')
-#library('lme4')
+library('lme4')
 library('lmerTest')
 
 summarizeFIPS <- function() {
@@ -8,6 +8,8 @@ summarizeFIPS <- function() {
   participants <- read.csv('data/participants.csv', stringsAsFactors = F)
   
   nullresponse <- 0
+  Ngray <- c()
+  Nblack <- c()
   
   amp     <- NA
   ampvel  <- NA
@@ -66,6 +68,32 @@ summarizeFIPS <- function() {
     pp.amp     <- aggregate(cbind(norm_percept, period_s, velocity) ~ framedistance_rel, data=ppFIPS[which(ppFIPS$trialtype %in% c('base', 'amp')),], FUN=mean)
     pp.ampvel  <- aggregate(cbind(norm_percept, period_s, velocity) ~ framedistance_rel, data=ppFIPS[which(ppFIPS$trialtype %in% c('base', 'amp+vel')),], FUN=mean)
     
+    # # # # # # # 
+    # THIS FROM VIS FUNCTION:
+    
+    below <- length(which(pp.12FIPS$norm_percept <=  0            ))
+    above <- length(which(pp.12FIPS$norm_percept  > (0.54 / .245) ))
+    
+    idx <- which(pp.12FIPS$norm_percept > 0 & !is.nan(pp.12FIPS$norm_percept))
+    percepts <- as.numeric(pp.12FIPS$norm_percept[idx])
+    
+    col <- 'gray'
+    
+    if (above & below) {
+      col <- 'red'
+    } else if (above) {
+      col <- 'orange'
+    } else if (below) {
+      col <- 'purple'
+      if (length(percepts) >= 10) {
+        col <- 'black'
+        #zero2 <- zero2 + 1
+      }
+    }
+    
+    
+    
+    # # # # #
     
     # add participant info to data:
     pp.amp$participant <- pp
@@ -79,6 +107,9 @@ summarizeFIPS <- function() {
     } else {
       allFIPS <- pp.12FIPS
     }
+    
+    if (col=='gray'){Ngray <- c(Ngray,pp)}
+    if (col=='black'){Nblack <- c(Nblack,pp)}
     
     #if (any(pp.amp$norm_percept == 0) | any(pp.ampvel$norm_percept == 0)) {
     
@@ -156,7 +187,10 @@ summarizeFIPS <- function() {
     
   }
   
-  return(list('amp'=amp, 'ampvel'=ampvel, 'wallach'=wallach, 'dva'=DVAinfo, 'catch'=catch, 'wallach-zero'=wallach.zero, 'amp-zero'=amp.zero, 'ampvel-zero'=ampvel.zero, 'allFIPS'=allFIPS, 'amp-2zero'=amp.2zero, 'ampvel-2zero'=ampvel.2zero))
+  #print(Ngray)
+  #print(Nblack)
+  
+  return(list('amp'=amp, 'ampvel'=ampvel, 'wallach'=wallach, 'dva'=DVAinfo, 'catch'=catch, 'wallach-zero'=wallach.zero, 'amp-zero'=amp.zero, 'ampvel-zero'=ampvel.zero, 'allFIPS'=allFIPS, 'amp-2zero'=amp.2zero, 'ampvel-2zero'=ampvel.2zero, 'gray'=Ngray, 'black'=Nblack))
   
 }
 
@@ -175,11 +209,13 @@ plotFIPSpercepts <- function() {
   
   
   data <- summarizeFIPS()
+  
+  
 
   layout(matrix(c(1,2,3,4),nrow=2,ncol=2,byrow=TRUE))
     
   #plot(-1000, -1000, main='', xlab='frame movement [nsu]', ylab='percieved distance [nsu]', xlim=c(0.08,0.2), ylim=c(0.08, 0.2), ax=F, bty='n', asp=1)
-  plot(-1000, -1000, main='vertically aligned dots', xlab='frame movement [% frame size]', ylab='percieved distance [% frame size]', xlim=c(0.3,0.8), ylim=c(0.3,0.8), ax=F, bty='n', asp=1)
+  plot(-1000, -1000, main='vertically aligned dots', xlab='frame movement [prop frame size]', ylab='percieved distance [prop frame size]', xlim=c(0.3,0.8), ylim=c(0.3,0.8), ax=F, bty='n', asp=1)
   
   lines(c(0.35, 0.8), c(0.35, 0.8), col='gray', lty=2)
   
@@ -187,12 +223,27 @@ plotFIPSpercepts <- function() {
   # amp <- data[['amp']]
   # ampvel <- data[['ampvel']]
   
-  amp <- data[['amp']]
-  ampvel <- data[['ampvel']]
-  amp20 <- data[['amp-2zero']]
-  ampvel20 <- data[['ampvel-2zero']]
-  amp <- rbind(amp, amp20)
-  ampvel <- rbind(ampvel, ampvel20)
+  data <- summarizeFIPS()
+  
+  gray <- data[['gray']]
+  black <- data[['black']]
+  
+  cat(sprintf('%d + %d = %d\n',length(gray),length(black),length(gray)+length(black)))
+  
+  selectedParticipants <- c(gray, black)
+  
+  selectedData <- data[['allFIPS']][which(data[['allFIPS']]$participant %in% selectedParticipants),]
+  
+  amp     <- aggregate(norm_percept ~ framedistance_rel + participant, data=selectedData[which(selectedData$trialtype %in% c('base', 'amp')),], FUN=mean)
+  ampvel  <- aggregate(norm_percept ~ framedistance_rel + participant, data=selectedData[which(selectedData$trialtype %in% c('base', 'amp+vel')),], FUN=mean)
+  
+  # THIS IS SOMEHOW WRONG:
+  # amp <- data[['amp']]
+  # ampvel <- data[['ampvel']]
+  # amp20 <- data[['amp-2zero']]
+  # ampvel20 <- data[['ampvel-2zero']]
+  # amp <- rbind(amp, amp20)
+  # ampvel <- rbind(ampvel, ampvel20)
   
   
   N <- length(unique(amp$participant))
@@ -239,12 +290,12 @@ plotFIPSpercepts <- function() {
   calibrated <- participants$participant[which(participants$card_used == "Yes" & participants$distance_method == "measured")]
   dva <- dva[which(dva$participant %in% calibrated & dva$participant %in% unique(amp$participant)),]
   
-  str(dva)
+  #str(dva)
   
   dva$one_dva <- (dva$one_dva_height + dva$one_dva_width) / 2
   dva <- dva[which(dva$one_dva > 0),]
   
-  print(dva$one_dva)
+  #print(dva$one_dva)
   dva.amp    <- amp[   which(amp$participant    %in% dva$participant),]
   dva.ampvel <- ampvel[which(ampvel$participant %in% dva$participant),]
   
@@ -254,20 +305,20 @@ plotFIPSpercepts <- function() {
   dva.ampvel$framedistance_rel <- dva.ampvel$framedistance_rel * .245
   
   dva$amp.slope <- NA
-  cat('set slope to be NA\n')
+  #cat('set slope to be NA\n')
   
   for (ppno in c(1:length(dva$participant))) {
     
     pp <- dva$participant[ppno]
     one_dva <- dva$one_dva[ppno]
     
-    print(pp)
+    #print(pp)
     
     idx1 <- which(dva.amp$participant    == pp)
     idx2 <- which(dva.ampvel$participant == pp)
     
     linmod <- lm(norm_percept ~ framedistance_rel, data=rbind(dva.amp[idx1,],dva.ampvel[idx2,]))
-    print(linmod[['coefficients']][['framedistance_rel']])
+    #print(linmod[['coefficients']][['framedistance_rel']])
     dva$amp.slope[ppno] <- linmod[['coefficients']][['framedistance_rel']]
     
     #dva.amp$framedistance_rel[idx] <- dva.amp$framedistance_rel[idx] / one_dva
@@ -275,13 +326,13 @@ plotFIPSpercepts <- function() {
     
   }
   
-  cat('alle proefpersonen gesloopt\n')
+  #cat('alle proefpersonen gesloopt\n')
   
   #points(dva.amp$framedistance_rel, dva.amp$norm_percept, col=transcolors[1])
   one_dva <- .245 / (dva$one_dva)
   amp.slope <- dva$amp.slope
   
-  print(range(one_dva))
+  #print(range(one_dva))
   
   points(one_dva, amp.slope, col=transcolors[1])
   
@@ -314,7 +365,7 @@ plotFIPSpercepts <- function() {
   # WALLACH DATA SUBPLOT
   # # # # # # # # # # # # # # # # #
   
-  plot(-1000, -1000, main='vertically offset dots\n[participants without main illusion]', xlab='frame movement [% frame size]', ylab='percieved distance [% frame size]', xlim=c(0.3,0.8), ylim=c(0.3,0.8), ax=F, bty='n', asp=1)
+  plot(-1000, -1000, main='vertically offset dots\n[participants without main illusion]', xlab='frame movement [prop frame size]', ylab='percieved distance [prop frame size]', xlim=c(0.3,0.8), ylim=c(0.3,0.8), ax=F, bty='n', asp=1)
   
   lines(c(0.35, 0.8), c(0.35, 0.8), col='gray', lty=2)
   
@@ -368,7 +419,7 @@ plotFIPSpercepts <- function() {
   # CATCH TRIALS SUBPLOT
   # # # # # # # # # # # # # # # # #
   
-  plot(-1000, -1000, main='catch trials (no frame)', xlab='reported dot offsest [% frame size]', ylab='relative distribution density', xlim=c(-1.5,1.5), ylim=c(0,.12), ax=F, bty='n')
+  plot(-1000, -1000, main='catch trials (no frame)', xlab='reported dot offsest [prop frame size]', ylab='relative distribution density', xlim=c(-1.5,1.5), ylim=c(0,.12), ax=F, bty='n')
   
   catch <- data[['catch']]
   catch$distancepercept_rel <- catch$distancepercept_rel / .245
@@ -694,7 +745,15 @@ getDemographics <- function() {
   participants <- read.csv('data/participants.csv', stringsAsFactors = F)
   
   datalist <- summarizeFIPS()
-  data.pp <- unique(datalist[['amp']]$participant)
+  #data.pp <- unique(datalist[['amp']]$participant)
+  
+  gray <- datalist[['gray']]
+  black <- datalist[['black']]
+  
+  cat(sprintf('%d + %d = %d\n',length(gray),length(black),length(gray)+length(black)))
+  
+  selectedParticipants <- c(gray, black)
+  data.pp <- selectedParticipants
   
   participants <- participants[which(participants$participant %in% data.pp),]
   
@@ -726,13 +785,26 @@ figureData <- function() {
 
   data <- summarizeFIPS()
   
-  amp <- data[['amp']]
-  ampvel <- data[['ampvel']]
-  amp20 <- data[['amp-2zero']]
-  ampvel20 <- data[['ampvel-2zero']]
+  gray <- data[['gray']]
+  black <- data[['black']]
   
-  amp <- rbind(amp, amp20)
-  ampvel <- rbind(ampvel, ampvel20)
+  cat(sprintf('%d + %d = %d\n',length(gray),length(black),length(gray)+length(black)))
+  
+  selectedParticipants <- c(gray, black)
+  
+  selectedData <- data[['allFIPS']][which(data[['allFIPS']]$participant %in% selectedParticipants),]
+  
+  amp     <- aggregate(norm_percept ~ framedistance_rel + participant, data=selectedData[which(selectedData$trialtype %in% c('base', 'amp')),], FUN=mean)
+  ampvel  <- aggregate(norm_percept ~ framedistance_rel + participant, data=selectedData[which(selectedData$trialtype %in% c('base', 'amp+vel')),], FUN=mean)
+  
+  # SOMEHOW WRONG:
+  # amp <- data[['amp']]
+  # ampvel <- data[['ampvel']]
+  # amp20 <- data[['amp-2zero']]
+  # ampvel20 <- data[['ampvel-2zero']]
+  # 
+  # amp <- rbind(amp, amp20)
+  # ampvel <- rbind(ampvel, ampvel20)
   
   N <- length(unique(amp$participant))
   
@@ -888,32 +960,54 @@ statsFIPS <- function() {
   
   datalist <- summarizeFIPS()
   
-  amp2zero    <- datalist[['amp-2zero']]
-  ampvel2zero <- datalist[['ampvel-2zero']]
-  amp         <- datalist[['amp']]
-  ampvel      <- datalist[['ampvel']]
+  gray <- datalist[['gray']]
+  black <- datalist[['black']]
   
-  amp2zero$condition    <- 'constant_velocity'
-  ampvel2zero$condition <- 'constant_period'
+  cat(sprintf('%d + %d = %d\n',length(gray),length(black),length(gray)+length(black)))
+  
+  selectedParticipants <- c(gray, black)
+  
+  selectedData <- datalist[['allFIPS']][which(datalist[['allFIPS']]$participant %in% selectedParticipants),]
+  
+  amp     <- aggregate(norm_percept ~ framedistance_rel + participant, data=selectedData[which(selectedData$trialtype %in% c('base', 'amp')),], FUN=mean)
+  ampvel  <- aggregate(norm_percept ~ framedistance_rel + participant, data=selectedData[which(selectedData$trialtype %in% c('base', 'amp+vel')),], FUN=mean)
+  
+  
+  
+  # amp2zero    <- datalist[['amp-2zero']]
+  # ampvel2zero <- datalist[['ampvel-2zero']]
+  # amp         <- datalist[['amp']]
+  # ampvel      <- datalist[['ampvel']]
+  # 
+  # amp2zero$condition    <- 'constant_velocity'
+  # ampvel2zero$condition <- 'constant_period'
   amp$condition         <- 'constant_velocity'
   ampvel$condition      <- 'constant_period'
   
   FIPS                  <- rbind(amp, ampvel)
   FIPS$condition         <- as.factor(FIPS$condition)
   
-  print(summary(lm(norm_percept ~ framedistance_rel + condition, data=FIPS)))
+  #print(names(FIPS))
+  names(FIPS) <- c("framedist","participant","norm_percept","cond")
   
-  FIPS20                <- rbind(amp2zero, ampvel2zero)
-  FIPS20$condition      <- as.factor(FIPS20$condition)
+  cat('\nMULTIPLE REGRESSION:\n\n')
   
-  print(summary(lm(norm_percept ~ framedistance_rel + condition, data=rbind(FIPS, FIPS20))))
+  print(summary(lm(norm_percept ~ framedist + cond, data=FIPS)))
+  
+  # FIPS20                <- rbind(amp2zero, ampvel2zero)
+  # FIPS20$condition      <- as.factor(FIPS20$condition)
+  # 
+  # print(summary(lm(norm_percept ~ framedistance_rel + condition, data=rbind(FIPS, FIPS20))))
+  # 
+  # 
+  # FIPS$condition         <- as.factor(FIPS$condition)
+  # FIPS$framedistance_rel <- as.factor(FIPS$framedistance_rel)
+  # FIPS20 <- rbind(amp2zero, ampvel2zero) 
+  
+  cat('\nANOVA:\n\n')
   
   
-  FIPS$condition         <- as.factor(FIPS$condition)
-  FIPS$framedistance_rel <- as.factor(FIPS$framedistance_rel)
-  FIPS20 <- rbind(amp2zero, ampvel2zero) 
-  
-  fit_FIPS <- aov_ez("participant","norm_percept",data=FIPS,within=c("condition","framedistance_rel"))
+  fit_FIPS <- aov_ez("participant","norm_percept",data=FIPS,within=c("cond","framedist"))
   print(nice(fit_FIPS))
   
   # print(ezANOVA(data=FIPS,
@@ -925,16 +1019,31 @@ statsFIPS <- function() {
   options(contrasts=c('contr.sum','contr.poly'))
   
   
-  FIPS_lmer <- lmerTest::lmer(norm_percept ~ framedistance_rel * condition - (1|participant),
-                              na.action = na.exclude,
-                              data = rbind(FIPS, FIPS20),
-                              REML = TRUE,
-                              control = lmerControl(optimizer ="Nelder_Mead")
+  FIPS_lmer <- lmerTest::lmer(norm_percept ~ framedist * cond - (1|participant),
+                             na.action = na.exclude,
+                             #data = rbind(FIPS, FIPS20),
+                             data = FIPS,
+                             REML = TRUE,
+                             control = lmerControl(optimizer ="Nelder_Mead")
   )
+  
+  # FIPS_lmer <- lme4::lmer(norm_percept ~ framedistance_rel * condition - (1|participant),
+  #                             na.action = na.exclude,
+  #                             #data = rbind(FIPS, FIPS20),
+  #                             data = FIPS,
+  #                             REML = TRUE,
+  #                             control = lmerControl(optimizer ="Nelder_Mead")
+  # )
+  
+  cat('\nLINEAR MIXED EFFECTS MODEL:\n\n')
+  
   
   print(summary(FIPS_lmer))
   
   #plot(FIPS_lmer)
+  
+  cat('\nSATTERTHWAITE LME:\n\n')
+  
   
   print(anova(FIPS_lmer,ddf='Satterthwaite',type=3))
   
